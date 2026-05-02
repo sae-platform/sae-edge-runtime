@@ -1,0 +1,11 @@
+<Solution>
+  <Project Path="SAE.EdgeRuntime.Core/SAE.EdgeRuntime.Core.csproj" />
+  <Project Path="SAE.EdgeRuntime.Fabric/SAE.EdgeRuntime.Fabric.csproj" />
+  <Project Path="SAE.EdgeRuntime.Host/SAE.EdgeRuntime.Host.csproj" />
+  <Project Path="SAE.EdgeRuntime.Modules/SAE.EdgeRuntime.Modules.csproj" />
+  <Project Path="SAE.EdgeRuntime.Persistence/SAE.EdgeRuntime.Persistence.csproj" />
+  <Project Path="SAE.EdgeRuntime.Projections/SAE.EdgeRuntime.Projections.csproj" />
+  <Project Path="SAE.EdgeRuntime.Runtime/SAE.EdgeRuntime.Runtime.csproj" />
+  <Project Path="SAE.EdgeRuntime.Shared/SAE.EdgeRuntime.Shared.csproj" />
+  <Project Path="SAE.EdgeRuntime.Sync/SAE.EdgeRuntime.Sync.csproj" />
+</Solution>
