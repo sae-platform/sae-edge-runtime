@@ -30,8 +30,11 @@ using SAE.EdgeRuntime.Modules.Fiscal;
 using SAE.EdgeRuntime.Modules.Fiscal.Persistence;
 using SAE.EdgeRuntime.Modules.Fiscal.Adapters;
 using SAE.Contracts.Hardware;
+using SAE.EdgeRuntime.Host.Gateway;
 using SAE.Cloud.Edge.Sdk;
 using SAE.Cloud.Edge.Sdk.Auth;
+using Yarp.ReverseProxy.Transforms;
+using System.Threading.RateLimiting;
 using System.Net;
 using System.Net.Sockets;
 
@@ -55,6 +58,37 @@ builder.Services.AddEdgeSdk(config =>
     config.GracePeriodHours = 72;
 });
 
+// ==========================================
+// 🚀 EDGE GATEWAY
+// ==========================================
+
+// Rate Limiting (per device + per tenant-device)
+builder.Services.AddEdgeRateLimiting();
+
+// Memory Cache (GET endpoint responses)
+builder.Services.AddMemoryCache();
+
+// Polly HTTP resilience for cloud calls
+builder.Services.AddHttpClient("cloud")
+    .AddPolicyHandler(EdgeGatewayPolicies.GetCombined());
+
+// YARP Reverse Proxy
+builder.Services.AddReverseProxy()
+    .LoadFromConfig(builder.Configuration.GetSection("ReverseProxy"))
+    .AddTransforms(builder =>
+    {
+        builder.AddRequestTransform(ctx =>
+        {
+            var tenantId = ctx.HttpContext.Items["TenantId"]?.ToString();
+            if (tenantId != null)
+                ctx.ProxyRequest.Headers.Add("X-Tenant-Id", tenantId);
+            var deviceId = ctx.HttpContext.Request.Headers["X-Device-Id"].FirstOrDefault();
+            if (deviceId != null)
+                ctx.ProxyRequest.Headers.Add("X-Device-Id", deviceId);
+            return ValueTask.CompletedTask;
+        });
+    });
+
 // 1. Core Kernel Configuration
 builder.Services.AddEdgeKernel();
 
@@ -65,7 +99,7 @@ var pgConn = builder.Configuration.GetConnectionString("EdgeDb")
 // A. Marten (Domain Events & Business Core)
 builder.Services.AddMarten(options => {
     options.Connection(pgConn);
-    options.AutoCreateSchemaObjects = Weasel.Core.AutoCreate.All;
+    // options.AutoCreateSchemaObjects = Weasel.Core.AutoCreate.All; 
     options.DatabaseSchemaName = "sae_edge";
     
     // Indexing for Catalog
@@ -157,6 +191,14 @@ app.UseCors();
 // Edge Auth middleware (validates JWT RS256 + license + device binding)
 if (!string.IsNullOrEmpty(cloudPublicKey))
     app.UseEdgeAuth();
+
+// ==========================================
+// 🚀 EDGE GATEWAY PIPELINE
+// ==========================================
+app.UseRateLimiter();                              // 1. Rate limit
+app.UseMiddleware<EdgeCacheMiddleware>();          // 2. Cache GET responses
+app.UseMiddleware<EdgeCircuitBreakerMiddleware>(); // 3. Circuit breaker
+app.MapReverseProxy();                             // 4. Route to Local Backend or Cloud
 
 // API Endpoints for testing the Kernel
 app.MapPost("/commands/orders", async (StartOrderCommand cmd, CommandDispatcher dispatcher) =>
