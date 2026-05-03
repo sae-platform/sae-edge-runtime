@@ -200,17 +200,13 @@ app.UseMiddleware<EdgeCacheMiddleware>();          // 2. Cache GET responses
 app.UseMiddleware<EdgeCircuitBreakerMiddleware>(); // 3. Circuit breaker
 app.MapReverseProxy();                             // 4. Route to Local Backend or Cloud
 
-// API Endpoints for testing the Kernel
-app.MapPost("/commands/orders", async (StartOrderCommand cmd, CommandDispatcher dispatcher) =>
-{
-    // Simulate tenant from header or auth token
-    var tenantId = Guid.Parse("00000000-0000-0000-0000-000000000001");
-    var tenantContext = new TenantContext(tenantId);
-    
-    await dispatcher.Dispatch(cmd, tenantContext);
-    
-    return Results.Accepted();
-});
+// ==========================================
+// EDGE RUNTIME ENDPOINTS (auth + info only)
+// ==========================================
+// NOTE: Business endpoints (orders, products, inventory, caja)
+// are served by SAE.LocalBackend.Api on port 5005.
+// Edge Gateway routes /api/local/* requests there via YARP.
+// ==========================================
 
 app.MapGet("/health", () => Results.Ok(new { Status = "SAE Edge Runtime Online", EdgeId = builder.Configuration["EdgeId"] ?? "edge-001" }));
 
@@ -222,52 +218,27 @@ app.MapPost("/api/edge/bootstrap", async (EdgeConfig config, CancellationToken c
     var token = await authClient.AuthenticateAsync(ct);
     if (token == null)
         return Results.Problem("Cloud authentication failed. Check Cloud:ApiUrl and Cloud:IdentityUrl config.");
-
-    return Results.Ok(new
-    {
-        status = "authenticated",
-        expires_at = token.ExpiresAt,
-        tenant_id = token.TenantId,
-        offline_grace = token.OfflineGraceHours
-    });
+    return Results.Ok(new { status = "authenticated", expires_at = token.ExpiresAt, tenant_id = token.TenantId, offline_grace = token.OfflineGraceHours });
 });
 
-// Edge Auth - Login for local devices/terminals
+// Edge Auth - Login for local devices
 app.MapPost("/api/edge/login", async (HttpContext ctx, LocalTokenValidator validator, LicenseValidator licenseValidator, 
     DeviceBindingService deviceBinding, EdgeSessionStore sessionStore) =>
 {
     var token = ctx.Request.Headers["Authorization"].FirstOrDefault()?.Replace("Bearer ", "");
-    if (string.IsNullOrEmpty(token))
-        return Results.Json(new { error = "missing_token" }, statusCode: 401);
-
+    if (string.IsNullOrEmpty(token)) return Results.Json(new { error = "missing_token" }, statusCode: 401);
     var payload = validator.Validate(token);
-    if (payload == null)
-        return Results.Json(new { error = "invalid_token" }, statusCode: 401);
-
-    if (!deviceBinding.Validate(payload.DeviceId))
-        return Results.Json(new { error = "device_mismatch" }, statusCode: 403);
-
-    if (!licenseValidator.Validate(payload))
-        return Results.Json(new { error = "license_expired" }, statusCode: 402);
-
+    if (payload == null) return Results.Json(new { error = "invalid_token" }, statusCode: 401);
+    if (!deviceBinding.Validate(payload.DeviceId)) return Results.Json(new { error = "device_mismatch" }, statusCode: 403);
+    if (!licenseValidator.Validate(payload)) return Results.Json(new { error = "license_expired" }, statusCode: 402);
     var session = sessionStore.Create(payload);
-    return Results.Ok(new
-    {
-        session_id = session.SessionId,
-        tenant_id = payload.TenantId,
-        modules = payload.Modules,
-        permissions = payload.Permissions,
-        license_until = payload.LicenseValidUntil
-    });
+    return Results.Ok(new { session_id = session.SessionId, tenant_id = payload.TenantId, modules = payload.Modules, permissions = payload.Permissions });
 });
 
-// Edge Info - current device status
+// Edge Info
 app.MapGet("/api/edge/info", (EdgeConfig config, DeviceBindingService deviceBinding) => Results.Ok(new
 {
-    device_id = deviceBinding.GetDeviceId(),
-    config_id = config.DeviceId,
-    tenant_id = config.TenantId,
-    cloud_url = config.CloudUrl
+    device_id = deviceBinding.GetDeviceId(), config_id = config.DeviceId, tenant_id = config.TenantId, cloud_url = config.CloudUrl
 }));
 
 app.MapPost("/api/hardware/print", async (PrintApiRequest req, HardwareModule hardware) =>
