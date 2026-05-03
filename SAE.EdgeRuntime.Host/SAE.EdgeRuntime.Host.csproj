@@ -8,9 +8,15 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.6" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.7">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
     <PackageReference Include="NATS.Client.Hosting" Version="2.7.3" />
     <PackageReference Include="NATS.Net" Version="2.7.3" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.1" />
     <PackageReference Include="Scalar.AspNetCore" Version="2.14.9" />
+    <PackageReference Include="Weasel.Core" Version="8.15.0" />
   </ItemGroup>
 
   <ItemGroup>
@@ -22,6 +28,7 @@
     <ProjectReference Include="..\SAE.EdgeRuntime.Runtime\SAE.EdgeRuntime.Runtime.csproj" />
     <ProjectReference Include="..\SAE.EdgeRuntime.Shared\SAE.EdgeRuntime.Shared.csproj" />
     <ProjectReference Include="..\SAE.EdgeRuntime.Fabric\SAE.EdgeRuntime.Fabric.csproj" />
+    <ProjectReference Include="..\..\SAE.CLOUD\src\SAE.Cloud.Edge.Sdk\SAE.Cloud.Edge.Sdk.csproj" />
   </ItemGroup>
 
 </Project>
